@@ -302,34 +302,165 @@ impl NN {
        training_error_rate
     }
 
-    fn do_run(&self, _: &[f64]) -> Vec<Vec<f64>> {
+    fn do_run(&self, inputs: &[f64]) -> Vec<Vec<f64>> {
         
-        Vec::new()
+        let mut results = Vec::new();
+        results.push(inputs.to_vec());
+        for (layer_index, layer) in self.layers.iter().enumerate() {
+            
+            let mut layer_results = Vec::new();
+            for node in layer.iter() {
+                layer_results.push( sigmoid(modified_dotprod(&node, &results[layer_index])))
+            }
+
+            results.push(layer_results);
+        }
+
+        results
     }
 
     fn update_weights(
         &mut self,
-        _: &Vec<Vec<Vec<f64>>>,
-        _: &mut Vec<Vec<Vec<f64>>>,
-        _: f64,
-        _: f64) {
+        network_weight_updates: &Vec<Vec<Vec<f64>>>,
+        prev_deltas: &mut Vec<Vec<Vec<f64>>>,
+        rate: f64,
+        momentum: f64) {
+        
+        for layer_index in 0..self.layers.len() {
+            
+            let mut layer = &mut self.layers[layer_index];
+            let layer_weight_updates = &network_weight_updates[layer_index];
+            for node_index in 0..layer.len() {
+                
+                let mut node = &mut layer[node_index];
+                let node_weight_updates = &layer_weight_updates[node_index];
+                for weight_index in 0..node.len() {
+                    
+                    let weight_update = node_weight_updates[weight_index];
+                    let prev_delta = prev_deltas[layer_index][node_index][weight_index];
+                    let delta = (rate*weight_update) + (momentum*prev_delta);
+                    node[weight_index] += delta;
+                    prev_deltas[layer_index][node_index][weight_index] = delta;
+                }
+            }
+        }
+    }
+
+    fn calculate_weight_updates(&self, results: &Vec<Vec<f64>>, targets: &[f64]) -> Vec<Vec<Vec<f64>>> {
     
-    }
+        let mut network_errors:Vec<Vec<f64>> = Vec::new();
+        let mut network_weight_updates = Vec::new();
+        let layers = &self.layers;
+        let network_results = &results[1..];
+        let mut next_layer_nodes: Option<&Vec<Vec<f64>>> = None;
 
-    fn calculate_weight_updates(&self, _: &Vec<Vec<f64>>, _: &[f64]) -> Vec<Vec<Vec<f64>>> {
-        
-        Vec::new()
-    }
+        for (layer_index, (layer_nodes, layer_results)) in iter_zip_enum(layers, network_results).rev() {
+            
+            let prev_layer_results = &results[layer_index];
+            let mut layer_errors = Vec::new();
+            let mut layer_weight_updates = Vec::new();
 
-    fn make_weights_tracker<T: Clone>(&self, _: T) -> Vec<Vec<Vec<T>>> {
-        
-        Vec::new()
+            for (node_index, (node, &result)) in iter_zip_enum(layer_nodes, layer_results) {
+                
+                let mut node_weight_updates = Vec::new();
+                let mut node_error;
+
+                if layer_index == layers.len() - 1 {
+                    node_error = result * (1f64 - result) * (targets[node_index] - result);
+                } else {
+                    
+                    let mut sum = 0f64;
+                    let next_layer_errors = &network_errors[network_errors.len() - 1];
+                    for (next_node, &next_node_error_data) in next_layer_nodes.unwrap().iter().zip((next_layer_errors).iter()) {
+                        
+                        sum += next_node[node_index+1]*next_node_error_data;
+                    }
+
+                    node_error = result * (1f64 - result) * sum;
+                }
+
+                for weight_index in 0..node.len() {
+                    
+                    let mut prev_layer_result;
+                    if weight_index == 0 {
+                        prev_layer_result = 1f64;
+                    } else {
+                        prev_layer_result = prev_layer_results[weight_index - 1];
+                    }
+
+                    let weight_update = node_error * prev_layer_result;
+                    node_weight_updates.push(weight_update);
+                }
+
+                layer_errors.push(node_error);
+                layer_weight_updates.push(node_weight_updates);
+            }
+
+            network_errors.push(layer_errors);
+            network_weight_updates.push(layer_weight_updates);
+            next_layer_nodes = Some(&layer_nodes);
+        }
+
+        network_weight_updates.reverse();
+
+        network_weight_updates
+    }
+    
+
+    fn make_weights_tracker<T: Clone>(&self, place_holder: T) -> Vec<Vec<Vec<T>>> {
+    
+        let mut network_level = Vec::new();
+        for layer in self.layers.iter() {
+            
+            let mut layer_level = Vec::new();
+            for node in layer.iter() {
+                
+                let mut node_level = Vec::new();
+                for _ in node.iter() {
+                    node_level.push(place_holder.clone());
+                }
+
+                layer_level.push(node_level);
+            }
+
+            network_level.push(layer_level);
+        }
+
+        network_level
     }
 
 }
-fn calculate_error(_: &Vec<Vec<f64>>, _: &[f64]) -> f64 {
+
+fn iter_zip_enum<'s, 't, S: 's, T: 't>(s: &'s [S], t: &'t [T]) ->
+    Enumerate<Zip<slice::Iter<'s, S>, slice::Iter<'t, T>>> {
         
-    0f64
+    s.iter().zip(t.iter()).enumerate()
+    }
+
+fn modified_dotprod(node: &Vec<f64>, values: &Vec<f64>) -> f64 {
+    let mut it = node.iter();
+    let mut total = *it.next().unwrap();
+
+    for (weight, value) in it.zip(values.iter()) {
+        total += weight * value;
+    }
+    total
+}
+
+fn sigmoid(y: f64) -> f64 {
+    1f64 / (1f64 + (-y).exp())
+}
+
+fn calculate_error(results: &Vec<Vec<f64>>, targets: &[f64]) -> f64 {
+    let ref last_results = results[results.len() - 1];
+    let mut total:f64 = 0f64;
+
+    for (&result, &target) in last_results.iter().zip(targets.iter()) {
+        
+        total += (target-result).powi(2);
+    }
+
+    total/(last_results.len() as f64)
 }
 
 
@@ -348,7 +479,26 @@ mod tests {
             ];
 
         let mut net1 = NN::new(&[2,4,3,1]);
-        println!("{:?}", net1)
+        println!("{:?}", net1);
+
+        net1.train(&examples)
+            .log_interval(Some(1000))
+            .halt_condition(HaltCondition::MSE(0.01))
+            .learning_mode( LearningMode::Incremental)
+            .momentum(0.5)
+            .rate(0.5)
+            .go();
+
+        for &(ref inputs, ref outputs) in examples.iter() {
+            
+            let results = net1.run(inputs);
+
+            println!("GAVE INPUTS {:?}, TO NET {:?}, GAVE RESULTS {:?}", inputs, net1, results);
+
+            let (result, key) = (results[0].round(), outputs[0]);
+
+            println!("RESULT {:?} WITH KEY {:?}", result, key);
+        } 
     }
 }
 
