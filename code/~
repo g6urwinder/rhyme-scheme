@@ -159,34 +159,21 @@ impl NN {
         let first_layer_size = *it.next().unwrap();
         let mut prev_layer_size = first_layer_size;
         
-        //println!("FIRST LAYER SIZE {:?}", first_layer_size);
-        //println!("PREV LAYER SIZE {:?}", prev_layer_size);
-
         for &layer_size in it {
             let mut layer: Vec<Vec<f64>> = Vec::new();
-            
-            //println!("LAYER => {:?}", layer);
-            for z in 0..layer_size {
+            for _ in 0..layer_size {
                 
                 let mut node: Vec<f64> = Vec::new();
-                for x in 0..prev_layer_size+1 {
+                for _ in 0..prev_layer_size+1 {
                     let random_weight: f64 = rng.gen_range(-0.5f64, 05f64);
                     node.push(random_weight);
-
-                    //println!("NODE AFTER PUSHING RANDOM WEIGHT {:?} => {:?} => {:?}",x,  prev_layer_size, node);
                 }
                 node.shrink_to_fit();
-
-                //println!("NODE AFTER SHRINKING {:?} => {:?} => {:?}", z, layer_size,  node);
                 layer.push(node)
             }
             layer.shrink_to_fit();
-
-            //println!("LATER AFTER SHRINKING {:?}", layer);
             layers.push(layer);
             prev_layer_size = layer_size;
-
-            //println!("PREVIOUS_LAYER_SIZE_AT_END:: {:?}", prev_layer_size);
         }
 
         layers.shrink_to_fit();
@@ -194,95 +181,9 @@ impl NN {
         NN { layers : layers, num_inputs: first_layer_size }
     }
 
-    pub fn run(&self, inputs: &[f64]) -> Vec<f64> {
+    fn train_details(&mut self, _: &[(Vec<f64>, Vec<f64>)], _: f64, _: f64, _: Option<u32>, _: HaltCondition) -> f64  {
         
-        if inputs.len() as u32 != self.num_inputs {
-            panic!("input has a different length than the network's input layer");
-        }
-
-        self.do_run(inputs).pop().unwrap()
-    }
-
-    pub fn train<'b>(&'b mut self, examples: &'b [(Vec<f64>, Vec<f64>)]) -> Trainer {
-        
-        Trainer {
-            examples: examples,
-            rate: DEFAULT_LEARNING_RATE,
-            momentum: DEFAULT_MOMENTUM,
-            log_interval: None,
-            halt_condition: Epochs(DEFAULT_EPOCHS),
-            learning_mode: Incremental,
-            nn: self
-        }
-    }
-    
-    pub fn to_json(&self) -> String {
-        json::encode(self).ok().expect("encoding JSON failed")
-    }
-
-    pub fn from_json(encoded: &str) -> NN {
-        let network: NN = json::decode(encoded).ok().expect("decoding JSON failed");
-        network
-    }
-
-    fn train_details(&mut self, 
-                     examples: &[(Vec<f64>, Vec<f64>)], 
-                     rate: f64, 
-                     momentum: f64,
-                     log_interval: Option<u32>,
-                     halt_condition: HaltCondition) -> f64 {
-    
-        let input_layer_size = self.num_inputs;
-        let output_layer_size = self.layers[self.layers.len()-1].len();
-
-        for &(ref inputs, ref outputs) in examples.iter() {
-            
-            if inputs.len() as u32 != input_layer_size {
-                panic!("input has a different length than the network's input layer");
-            }
-
-            if outputs.len() != output_layer_size {
-                panic!("output has a different length than the network's output layer");
-            }
-        }
-
-        self.train_incremental(examples, rate, momentum, log_interval, halt_condition)
-    }
-
-    fn train_incremental(
-        &mut self,
-        examples: &[(Vec<f64>, Vec<f64>)],
-        rate: f64,
-        momentum: f64,
-        log_interval: Option<u32>,
-        halt_condition: HaltCondition
-        ) -> f64 {
-    
         0f64
-    }
-
-    fn do_run(&self, _: &[f64]) -> Vec<Vec<f64>> {
-        
-        Vec::new()
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    
-    use super::*;
-
-    #[test]
-    fn superman() {
-        let examples = [
-                (vec![0f64, 0f64], vec![0f64]),
-                (vec![0f64, 1f64], vec![1f64]),
-                (vec![1f64, 0f64], vec![1f64]),
-                (vec![1f64, 1f64], vec![0f64]),
-            ];
-
-        let mut net1 = NN::new(&[2,4,3,1]);
-        println!("{:?}", net1)
     }
 }
 
