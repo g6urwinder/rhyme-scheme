@@ -5,6 +5,7 @@ use HaltCondition::{ Epochs, MSE, Timer };
 
 use LearningMode::{ Incremental };
 use time::{ Duration, PreciseTime };
+use std::iter::{Zip, Enumerate};
 use rand::Rng;
 use rustc_serialize::json;
 use std::slice;
@@ -222,12 +223,73 @@ fn train_incremental(&mut self, examples: &[(Vec<f64>, Vec<f64>)], rate: f64, mo
     training_error_rate
 }
 
-    fn calculate_weight_updates(&self, _: &Vec<Vec<f64>>, _: &[f64]) -> Vec<Vec<Vec<f64>>> {
-        Vec::new()
-    }
+    fn calculate_weight_updates(&self, results: &Vec<Vec<f64>>, targets: &[f64]) -> Vec<Vec<Vec<f64>>> {
+        let mut network_errors: Vec<Vec<f64>> = Vec::new();
+        let mut network_weight_updates = Vec::new();
+        let layers = &self.layers;
+        let network_results = &results[1..];
+        let mut next_layer_nodes: Option<&Vec<Vec<f64>>> = None;
 
-    fn make_weights_tracker<T: Clone>(&self, _: T) -> Vec<Vec<Vec<f64>>> {
-        Vec::new()
+        for (layer_index, (layer_nodes, layer_results)) in iter_zip_enum(layers, network_results).rev() {
+            let prev_layer_results = &results[layer_index];
+            let mut layer_errors = Vec::new();
+            let mut layer_weight_updates = Vec::new();
+
+
+            for (node_index, (node, &result)) in iter_zip_enum(layer_nodes, layer_results) {
+                let mut node_weight_updates = Vec::new();
+                let mut node_error;
+
+
+                if layer_index == layers.len() - 1 {
+                    node_error = result * (1f64 - result) * (targets[node_index] - result);
+                } else {
+                    let mut sum = 0f64;
+                    let next_layer_errors = &network_errors[network_errors.len() -  1];
+                    for (next_node, &next_node_error_data) in next_layer_nodes.unwrap().iter().zip((next_layer_errors).iter()) {
+                        sum += next_node[node_index + 1] * next_node_error_data;
+                    }
+                    node_error = result * (1f64 - result) * sum;
+                }
+
+                for weight_index in 0..node.len() {
+                    let mut prev_layer_result;
+                    if weight_index == 0 {
+                        prev_layer_result = 1f64;
+                    } else {
+                        prev_layer_result = prev_layer_results[weight_index -1];
+                    }
+                    let weight_update = node_error * prev_layer_result;
+                    node_weight_updates.push(weight_update);
+                }
+
+                layer_errors.push(node_error);
+                layer_weight_updates.push(node_weight_updates);
+            }
+
+            network_errors.push(layer_errors);
+            network_weight_updates.push(layer_weight_updates);
+            next_layer_nodes = Some(&layer_nodes);
+        }
+
+        network_weight_updates.reverse();
+        network_weight_updates
+     }
+
+    fn make_weights_tracker<T: Clone>(&self, place_holder: T) -> Vec<Vec<Vec<T>>> {
+        let mut network_level = Vec::new();
+        for layer in self.layers.iter() {
+            let mut layer_level = Vec::new();
+            for node in layer.iter() {
+                let mut node_level = Vec::new();
+                for _ in node.iter() {
+                    node_level.push(place_holder.clone());
+                }
+                layer_level.push(node_level);
+            }
+            network_level.push(layer_level);
+        }
+        network_level
     }
 
     fn update_weights(&mut self, _: Vec<Vec<Vec<f64>>>, _: &mut Vec<Vec<Vec<f64>>>, _: f64, _:f64) {
@@ -268,8 +330,18 @@ fn train_incremental(&mut self, examples: &[(Vec<f64>, Vec<f64>)], rate: f64, mo
 
 }
 
-fn calculate_error(_ : &Vec<Vec<f64>>, _: &[f64]) -> f64 {
-    0f64
+fn calculate_error(results : &Vec<Vec<f64>>, targets: &[f64]) -> f64 {
+    let ref last_results = results[results.len() -1];
+    let mut total:f64 = 0f64;
+    for(&result, &target) in last_results.iter().zip(targets.iter()) {
+        total += (target - result).powi(2);
+    }
+    total / (last_results.len() as f64)
+}
+
+fn iter_zip_enum<'s, 't, S: 's, T: 't>(s: &'s [S], t: &'t [T]) ->
+    Enumerate<Zip<slice::Iter<'s, S>, slice::Iter<'t, T>>>  {
+    s.iter().zip(t.iter()).enumerate()
 }
 
 fn main() {
