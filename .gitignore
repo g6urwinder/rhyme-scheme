@@ -1,0 +1,3 @@
+/code/src/*.swp
+/code/target/release/*
+/code/target/debug/*
