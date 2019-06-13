@@ -258,14 +258,80 @@ impl NN {
         halt_condition: HaltCondition
         ) -> f64 {
     
-        0f64
+       let mut prev_deltas = self.make_weights_tracker(0.0f64);
+       let mut epochs = 0u32;
+       let mut training_error_rate = 0f64;
+       let start_time = PreciseTime::now();
+
+       loop {
+        
+           if epochs > 0 {
+            match log_interval {
+                Some(interval) if epochs % interval == 0 => {
+                    println!("error rate: {}", training_error_rate);
+                },
+                _ => (),
+            }
+
+            match halt_condition {
+                Epochs(epochs_halt) => {
+                    if epochs == epochs_halt { break }
+                },
+                MSE(target_error) => {
+                    if training_error_rate <= target_error { break }
+                },
+                Timer(duration) => {
+                    let now = PreciseTime::now();
+                    if start_time.to(now) >= duration { break }
+                }
+            }
+           }
+
+           training_error_rate = 0f64;
+
+           for &(ref inputs, ref targets) in examples.iter() {
+            let results = self.do_run(&inputs);
+            let weight_updates = self.calculate_weight_updates(&results, &targets);
+            training_error_rate += calculate_error(&results, &targets);
+            self.update_weights(&weight_updates, &mut prev_deltas, rate, momentum)
+           } 
+
+           epochs += 1;
+       }
+
+       training_error_rate
     }
 
     fn do_run(&self, _: &[f64]) -> Vec<Vec<f64>> {
         
         Vec::new()
     }
+
+    fn update_weights(
+        &mut self,
+        _: &Vec<Vec<Vec<f64>>>,
+        _: &mut Vec<Vec<Vec<f64>>>,
+        _: f64,
+        _: f64) {
+    
+    }
+
+    fn calculate_weight_updates(&self, _: &Vec<Vec<f64>>, _: &[f64]) -> Vec<Vec<Vec<f64>>> {
+        
+        Vec::new()
+    }
+
+    fn make_weights_tracker<T: Clone>(&self, _: T) -> Vec<Vec<Vec<T>>> {
+        
+        Vec::new()
+    }
+
 }
+fn calculate_error(_: &Vec<Vec<f64>>, _: &[f64]) -> f64 {
+        
+    0f64
+}
+
 
 #[cfg(test)]
 mod tests {
