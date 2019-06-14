@@ -145,10 +145,10 @@ impl NN {
         let mut prev_layer_size = first_layer_size;
         for &layer_size in it {
             let mut layer: Vec<Vec<f64>> = Vec::new();
-            for _ in 0..layer_size {
-                    let mut node: Vec<f64> = Vec::new();
-            for _ in 0..prev_layer_size+1 {
-                let random_weight: f64 = rng.gen_range(-0.5f64, 0.5f64);
+            for z in 0..layer_size {
+            let mut node: Vec<f64> = Vec::new();
+            for x in 0..prev_layer_size+1 {
+                let random_weight: f64 = rng.gen_range(-0.5f64, 05f64);
                 node.push(random_weight);
                }
                node.shrink_to_fit();
@@ -159,69 +159,75 @@ impl NN {
             prev_layer_size = layer_size;
         }
         layers.shrink_to_fit();
-        NN {layers: Vec::new(), num_inputs: 0u32}
+        NN {layers: layers, num_inputs: first_layer_size}
     }
 
-fn train_details(&mut self, examples: &[(Vec<f64>, Vec<f64>)], rate: f64, momentum: f64, log_interval: Option<u32>,
-               halt_condition: HaltCondition) -> f64 {
-   let input_layer_size = self.num_inputs;
-   let output_layer_size = self.layers[self.layers.len() - 1].len();
-   for &(ref inputs, ref outputs) in examples.iter() {
-       if inputs.len() as u32 != input_layer_size {
-           panic!("input has a different length than the network's input layer");
-       }
-       if outputs.len() != output_layer_size {
-           panic!("output has a different length than the network's output layer");
-       }
-   }
-
-   self.train_incremental(examples, rate, momentum, log_interval, halt_condition)
-}
-
-fn train_incremental(&mut self, examples: &[(Vec<f64>, Vec<f64>)], rate: f64, momentum: f64, log_interval: Option<u32>,
+    fn train_details(&mut self, examples: &[(Vec<f64>, Vec<f64>)], rate: f64, momentum: f64, log_interval: Option<u32>,
                     halt_condition: HaltCondition) -> f64 {
-    let mut prev_deltas = self.make_weights_tracker(0.0f64);
-    let mut epochs = 0u32;
-    let mut training_error_rate = 0f64;
-    let start_time = PreciseTime::now();
 
-    loop {
-        if epochs > 0 {
-            match log_interval {
-                Some(interval) if epochs % interval == 0 => {
-                    println!("error rate: {}", training_error_rate);
-                },
-
-                _ => (),
+        // check that input and output sizes are correct
+        let input_layer_size = self.num_inputs;
+        let output_layer_size = self.layers[self.layers.len() - 1].len();
+        for &(ref inputs, ref outputs) in examples.iter() {
+            if inputs.len() as u32 != input_layer_size {
+                panic!("input has a different length than the network's input layer");
             }
-
-            match halt_condition {
-                Epochs(epochs_halt) => {
-                    if epochs == epochs_halt {break}
-                },
-                MSE(target_error) => {
-                    if training_error_rate <= target_error {break}
-                },
-                Timer(duration) => {
-                    let now = PreciseTime::now();
-                    if start_time.to(now) >= duration {break}
-                }
+            if outputs.len() != output_layer_size {
+                panic!("output has a different length than the network's output layer");
             }
         }
 
-        training_error_rate = 0f64;
-
-        for &(ref inputs, ref targets) in examples.iter() {
-            let results = self.do_run(&inputs);
-            let weight_updates = self.calculate_weight_updates(&results, &targets);
-            training_error_rate += calculate_error(&results, &targets);
-            self.update_weights(weight_updates, &mut prev_deltas, rate, momentum)
-        }
-
-        epochs += 1;
+        self.train_incremental(examples, rate, momentum, log_interval, halt_condition)
     }
-    training_error_rate
-}
+
+    fn train_incremental(&mut self, examples: &[(Vec<f64>, Vec<f64>)], rate: f64, momentum: f64, log_interval: Option<u32>,
+                        halt_condition: HaltCondition) -> f64 {
+
+            let mut prev_deltas = self.make_weights_tracker(0.0f64);
+            let mut epochs = 0u32;
+            let mut training_error_rate = 0f64;
+            let start_time = PreciseTime::now();
+
+            loop {
+
+                if epochs > 0 {
+                    // log error rate if necessary
+                    match log_interval {
+                        Some(interval) if epochs % interval == 0 => {
+                            println!("error rate: {}", training_error_rate);
+                        },
+                        _ => (),
+                    }
+
+                    // check if we've met the halt condition yet
+                    match halt_condition {
+                        Epochs(epochs_halt) => {
+                            if epochs == epochs_halt { break }
+                        },
+                        MSE(target_error) => {
+                            if training_error_rate <= target_error { break }
+                        },
+                        Timer(duration) => {
+                            let now = PreciseTime::now();
+                            if start_time.to(now) >= duration { break }
+                        }
+                    }
+                }
+
+                training_error_rate = 0f64;
+
+                for &(ref inputs, ref targets) in examples.iter() {
+                    let results = self.do_run(&inputs);
+                    let weight_updates = self.calculate_weight_updates(&results, &targets);
+                    training_error_rate += calculate_error(&results, &targets);
+                    self.update_weights(&weight_updates, &mut prev_deltas, rate, momentum)
+                }
+
+                epochs += 1;
+            }
+
+            training_error_rate
+        }
 
     fn calculate_weight_updates(&self, results: &Vec<Vec<f64>>, targets: &[f64]) -> Vec<Vec<Vec<f64>>> {
         let mut network_errors: Vec<Vec<f64>> = Vec::new();
@@ -292,9 +298,24 @@ fn train_incremental(&mut self, examples: &[(Vec<f64>, Vec<f64>)], rate: f64, mo
         network_level
     }
 
-    fn update_weights(&mut self, _: Vec<Vec<Vec<f64>>>, _: &mut Vec<Vec<Vec<f64>>>, _: f64, _:f64) {
+    fn update_weights(&mut self, network_weight_updates: &Vec<Vec<Vec<f64>>>, prev_deltas: &mut Vec<Vec<Vec<f64>>>, rate: f64, momentum: f64) {
+      for layer_index in 0..self.layers.len() {
+          let mut layer = &mut self.layers[layer_index];
+          let layer_weight_updates = &network_weight_updates[layer_index];
+          for node_index in 0..layer.len() {
+              let mut node = &mut layer[node_index];
+              let node_weight_updates = &layer_weight_updates[node_index];
+              for weight_index in 0..node.len() {
+                  let weight_update = node_weight_updates[weight_index];
+                  let prev_delta = prev_deltas[layer_index][node_index][weight_index];
+                  let delta = (rate * weight_update) + (momentum * prev_delta);
+                  node[weight_index] += delta;
+                  prev_deltas[layer_index][node_index][weight_index] = delta;
+              }
+          }
+      }
 
-    }
+  }
 
     pub fn run(&self, inputs: &[f64]) -> Vec<f64> {
         if inputs.len() as u32 != self.num_inputs {
@@ -315,8 +336,18 @@ fn train_incremental(&mut self, examples: &[(Vec<f64>, Vec<f64>)], rate: f64, mo
        }
    }
 
-   pub fn do_run(&self, _: &[f64]) -> Vec<Vec<f64>> {
-       Vec::new()
+   pub fn do_run(&self, inputs: &[f64]) -> Vec<Vec<f64>> {
+       let mut results = Vec::new();
+       results.push(inputs.to_vec());
+       for(layer_index, layer) in self.layers.iter().enumerate() {
+           let mut layer_results = Vec::new();
+           for node in layer.iter() {
+               layer_results.push( sigmoid(modified_dotprod(&node, &results[layer_index])))
+           }
+
+           results.push(layer_results);
+       }
+       results
    }
 
    pub fn to_json(&self) -> String {
@@ -342,6 +373,59 @@ fn calculate_error(results : &Vec<Vec<f64>>, targets: &[f64]) -> f64 {
 fn iter_zip_enum<'s, 't, S: 's, T: 't>(s: &'s [S], t: &'t [T]) ->
     Enumerate<Zip<slice::Iter<'s, S>, slice::Iter<'t, T>>>  {
     s.iter().zip(t.iter()).enumerate()
+}
+
+
+#[cfg(test)]
+mod tests {
+
+    use super::*;
+
+    #[test]
+    fn superman() {
+        let examples = [
+                (vec![0f64, 0f64], vec![0f64]),
+                (vec![0f64, 1f64], vec![1f64]),
+                (vec![1f64, 0f64], vec![1f64]),
+                (vec![1f64, 1f64], vec![0f64]),
+            ];
+
+        let mut net1 = NN::new(&[2,4,3,1]);
+        println!("{:?}", net1);
+
+        net1.train(&examples)
+            .log_interval(Some(1000))
+            .halt_condition(HaltCondition::MSE(0.01))
+            .learning_mode( LearningMode::Incremental)
+            .momentum(0.5)
+            .rate(0.5)
+            .go();
+
+        for &(ref inputs, ref outputs) in examples.iter() {
+
+            let results = net1.run(inputs);
+
+            println!("GAVE INPUTS {:?}, TO NET {:?}, GAVE RESULTS {:?}", inputs, net1, results);
+
+            let (result, key) = (results[0].round(), outputs[0]);
+
+            println!("RESULT {:?} WITH KEY {:?}", result, key);
+        }
+    }
+}
+
+fn sigmoid(y: f64) -> f64 {
+    1f64 / (1f64 + (-y).exp())
+}
+
+fn modified_dotprod(node: &Vec<f64>, values: &Vec<f64>) -> f64 {
+    let mut it = node.iter();
+    let mut total = *it.next().unwrap();
+
+    for (weight, value) in it.zip(values.iter()) {
+        total += weight * value;
+    }
+    total
 }
 
 fn main() {
