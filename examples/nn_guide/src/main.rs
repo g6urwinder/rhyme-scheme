@@ -1,5 +1,4 @@
-mod single_gate_circuit;
+mod analytic_gradient;
 
 pub fn main() {
-    println!("Hello, world!");
 }
