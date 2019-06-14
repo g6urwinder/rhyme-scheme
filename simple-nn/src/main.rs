@@ -478,6 +478,7 @@ mod tests {
                 (vec![1f64, 1f64], vec![0f64]),
             ];
 
+
         let mut net1 = NN::new(&[2,4,3,1]);
         println!("{:?}", net1);
 
