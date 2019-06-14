@@ -1,0 +1,3 @@
+/simple-nn/src/*.swp
+/simple-nn/target/release/*
+/simple-nn/target/debug/*
