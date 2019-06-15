@@ -1,75 +1,23 @@
 extern crate rand;
 use rand::Rng;
 
-pub fn analytic_gradient() {
-    
-    fn forwardMultiplyGate(x: f64, y: f64) -> f64 {
-        x*y
-    };
-    
-    fn forwardAddGate(x: f64, y: f64) -> f64 {
-        x + y
-    };
+mod foo {
 
-    let mut x: f64 = -2.0;
-    let mut y: f64 = 3.0;
-    let out = forwardMultiplyGate(x, y);
-    let x_gradient = y;
-    let y_gradient = x;
-
-    let step_size = 0.01;
-    x = x + step_size*x_gradient;
-    y = y + step_size*y_gradient;
-    let out_new = forwardMultiplyGate(x, y);
-
-    println!("OLD OUTPUT #{:?} NEW OUTPUT {:?}", out, out_new);
-
-    fn forwardCircuit(x: f64, y: f64, z: f64) -> f64 {
-        let q = forwardAddGate(x,y);
-        let f = forwardMultiplyGate(q, z);
-        f
-    }
-
-    let output_forward_new = forwardCircuit(-2.0, 5.0, -4.0);
-    println!("NEW OUTPUT WITH FORWARD + * #{:?}", output_forward_new);
-
-    x = -2.0;
-    y = 5.0;
-    let mut z = -4.0;
-
-    let mut q = forwardAddGate(x, y);
-    let mut f = forwardMultiplyGate(q, z);
-
-    let mut derivative_f_wrt_z = q;
-    let mut derivative_f_wrt_q = z;
-
-    let mut derivative_q_wrt_x = 1.0;
-    let mut derivative_q_wrt_y = 1.0;
-
-    let derivative_f_wrt_x = derivative_q_wrt_x * derivative_f_wrt_q;
-    let derivative_f_wrt_y = derivative_q_wrt_y * derivative_f_wrt_q;
-
-    let gradient_f_wrt_xyz = [derivative_f_wrt_x, derivative_f_wrt_y, derivative_f_wrt_z];
-
-    let step_size = 0.01;
-    x = x + step_size * derivative_f_wrt_x;
-    y = y + step_size * derivative_f_wrt_y;
-    z = z + step_size * derivative_f_wrt_z;
-
-    let new_q = forwardAddGate(x, y);
-    println!("NEW GATE {:?}", new_q);
-
-    let new_f = forwardMultiplyGate(q, z);
-    println!("NEW F {:?}", new_f);
-   
-
+    #[derive(Debug, Copy, Clone)]
     pub struct Unit {
-        value: f64,
-        grad: f64,
+        pub value: f64,
+        pub grad: f64,
     }
 
     impl Unit {
-        fn new(value: f64, grad: f64) -> Unit {
+        pub fn empty() -> Unit {
+            Unit {
+                value: 0.0,
+                grad: 0.0,
+            }
+        }
+
+        pub fn new(value: f64, grad: f64) -> Unit {
 
            Unit {
             value: value,
@@ -78,15 +26,24 @@ pub fn analytic_gradient() {
         }
     }
 
+    #[derive(Debug)]
     pub struct MultiplyGate {
-        u0: Unit,
-        u1: Unit,
-        utop: Unit,
+        pub u0: Unit,
+        pub u1: Unit,
+        pub utop: Unit,
     }
 
     impl MultiplyGate {
+
+        pub fn empty() -> MultiplyGate {
+            MultiplyGate {
+                u0: Unit::empty(),
+                u1: Unit::empty(),
+                utop: Unit::empty(),
+            }
+        }
         
-        fn forward(&mut self, u0: Unit, u1: Unit) -> &mut MultiplyGate {
+        pub fn forward(mut self, u0: Unit, u1: Unit) -> MultiplyGate {
             
             self.u0 = u0;
             self.u1 = u1;
@@ -94,23 +51,32 @@ pub fn analytic_gradient() {
             self
         }
 
-        fn backward(&mut self) -> &mut MultiplyGate {
+        pub fn backward(mut self) -> MultiplyGate {
             
             self.u0.grad = self.u0.grad + self.u1.value*self.utop.grad;
             self.u1.grad = self.u1.grad + self.u0.value*self.utop.grad;
             self
         }
     }
-
+    
+    #[derive(Debug)]
     pub struct AddGate {
-        u0: Unit,
-        u1: Unit,
-        utop: Unit,
+        pub u0: Unit,
+        pub u1: Unit,
+        pub utop: Unit,
     }
 
     impl AddGate {
         
-        fn forward(&mut self, u0: Unit, u1: Unit) -> &mut AddGate {
+        pub fn empty() -> AddGate {
+            AddGate {
+                u0: Unit::empty(),
+                u1: Unit::empty(),
+                utop: Unit::empty(),
+            }
+        }
+
+        pub fn forward(mut self, u0: Unit, u1: Unit) -> AddGate {
             
             self.u0 = u0;
             self.u1 = u1;
@@ -118,49 +84,56 @@ pub fn analytic_gradient() {
             self
         }
 
-        fn backward(&mut self) -> &mut AddGate {
+        pub fn backward(mut self) -> AddGate {
         
             self.u0.grad = self.u0.grad + 1.0 * self.utop.grad;
             self.u1.grad = self.u1.grad + 1.0 * self.utop.grad;
             self
         }
     }
-
+    
+    #[derive(Debug)]
     pub struct SigmoidGate {
-        u0: Unit,
-        utop: Unit,
+        pub u0: Unit,
+        pub utop: Unit,
     }
 
-        
-       
     pub fn sig(x: f64) -> f64 {
-        1.0/(1.0 + dopow(-x))
+        if x > 0.0 {
+            1.0/(1.0 + (1.0/dopow(x)))
+        } else {
+            1.0/(1.0 + dopow(-1.0*x)) as f64
+        }
     }
 
-    pub fn dopow(mut exp: f64) -> f64 {
-                let mut acc = 1.0;
-                while exp > 0.0 {
-                                acc = acc * 2.0;
-                                exp -= 1.0;
-                            }
-                acc
+    pub fn dopow(exp: f64) -> f64 {
+        std::f64::consts::E.powi(exp as i32)
     }
 
     impl SigmoidGate {
+       
+        pub fn empty() -> 
+            SigmoidGate 
+            { 
+                SigmoidGate {
+                  u0: Unit::empty(),
+                  utop: Unit::empty(),
+                }
+            }
 
-       fn forward(&mut self, u0: Unit) -> &mut SigmoidGate {
-        
+        pub fn forward(mut self, u0: Unit) -> SigmoidGate {
+
            self.u0 = u0;
            self.utop = Unit::new(sig(self.u0.value), 0.0);
            self
-       }
+        }
 
-       fn backward(&mut self) -> &mut SigmoidGate {
+        pub fn backward(mut self) -> SigmoidGate {
         
            let s = sig(self.u0.value);
            self.u0.grad = self.u0.grad + (s * (1.0 - s)) * self.utop.grad;
            self
-       }
+        }
     }
 }
 
@@ -170,4 +143,45 @@ mod tests {
 
     use super::*;
     
+    #[test]
+    fn test_forward_neurons() {
+        
+        let mut a: foo::Unit = foo::Unit::new(1.0, 0.0);
+        let mut b: foo::Unit = foo::Unit::new(2.0, 0.0);
+        let mut c: foo::Unit = foo::Unit::new(-3.0, 0.0);
+        let mut x: foo::Unit = foo::Unit::new(-1.0, 0.0);
+        let mut y: foo::Unit = foo::Unit::new(3.0, 0.0);
+
+        let mut mulg0: foo::MultiplyGate = foo::MultiplyGate::empty();
+        let mut mulg1: foo::MultiplyGate = foo::MultiplyGate::empty();
+        let mut addg0: foo::AddGate = foo::AddGate::empty();
+        let mut addg1: foo::AddGate = foo::AddGate::empty();
+        let mut sg0: foo::SigmoidGate = foo::SigmoidGate::empty();
+
+            
+        let mut ax: foo::MultiplyGate = foo::MultiplyGate::forward(mulg0, a, x);
+        let mut by: foo::MultiplyGate = foo::MultiplyGate::forward(mulg1, b, y);
+        let mut axpby: foo::AddGate = foo::AddGate::forward(addg0, ax.utop, by.utop);
+        let mut axpbypc: foo::AddGate = foo::AddGate::forward(addg1, axpby.utop, c);
+        let mut s: foo::SigmoidGate = foo::SigmoidGate::forward(sg0, axpbypc.utop);
+
+        println!("AX => {:?}", ax.utop.value);
+        println!("BY => {:?}", by.utop.value);
+        println!("AXPBY => {:?}", axpby.utop.value);
+        println!("AXPBYPC => {:?}", axpbypc.utop.value);
+        println!("S => {:?}", s.utop.value);
+    }
+
+    #[test]
+    fn it_works() {
+        
+        let mut sigmoid: foo::SigmoidGate = 
+            foo::SigmoidGate {
+                u0 : foo::Unit::new(1.0, 2.0),
+                utop : foo::Unit::new(0.0, 0.0),
+            };
+        
+        sigmoid = foo::SigmoidGate::forward(sigmoid, foo::Unit::new(-10.0, 2.0));
+        sigmoid = foo::SigmoidGate::backward(sigmoid);
+    }
 }
