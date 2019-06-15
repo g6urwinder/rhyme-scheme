@@ -1,4 +1,4 @@
-mod analytic_gradient;
+mod svm;
 
 pub fn main() {
 }
