@@ -261,7 +261,7 @@ impl SVM {
 mod tests {
     use super::*;
     
-    fn eval_training_accuracy(mut data: Vec<Vec<f64>>,mut labels: Vec<i8>, mut svm: SVM) -> f64 {
+    fn eval_training_accuracy(mut data: Vec<Vec<f64>>,mut labels: Vec<i8>, mut svm: SVM) -> (SVM, f64) {
         
         let mut num_correct = 0.0 as f64;
 
@@ -272,7 +272,8 @@ mod tests {
             let true_label = labels[i];
 
             let mut predicted_level = 1;
-            if SVM::forward(svm, x, y).unit_out > 0.0 {
+            svm = SVM::forward(svm, x, y);
+            if svm.unit_out > 0.0 {
                 predicted_level = 1;
             } else {
                 predicted_level = -1;
@@ -283,7 +284,7 @@ mod tests {
             }
         }
 
-        num_correct/data.len() as f64
+        (svm, num_correct/data.len() as f64)
     }
     
     #[derive(Debug, Clone)]
@@ -365,8 +366,9 @@ mod tests {
            svm = SVM::learn_from(svm, x, y, label);
 
            if (iter % 10 == 0) {
-            
-               println!("TRAINING ACCURACY AT ITER {:?} : {:?}", iter, eval_training_accuracy(data_labels.clone().data, data_labels.clone().labels, svm))
+               let (svm_new, acc) = eval_training_accuracy(data_labels.clone().data, data_labels.clone().labels, svm); 
+               svm = svm_new.clone();
+               println!("TRAINING ACCURACY AT ITER {:?} : {:?}", iter, acc)
            }
        } 
     }
